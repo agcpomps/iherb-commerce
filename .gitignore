@@ -1,0 +1,66 @@
+# =====================
+# Environment & Secrets
+# =====================
+.env
+.env.*
+!.env.example
+
+# =====================
+# Docker
+# =====================
+docker-compose.override.yml
+*.log
+
+# =====================
+# Go
+# =====================
+# Binaries
+bin/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go workspace
+/go.work
+/go.work.sum
+
+# Go test & coverage
+*.test
+*.out
+coverage/
+
+# =====================
+# Node / Astro
+# =====================
+node_modules/
+dist/
+.astro/
+
+# =====================
+# OS / Editor
+# =====================
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# JetBrains
+.idea/
+
+# =====================
+# Database
+# =====================
+postgres_data/
+*.sqlite
+*.db
+
+# =====================
+# Temporary / Cache
+# =====================
+tmp/
+.cache/
