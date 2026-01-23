@@ -4,11 +4,18 @@ import (
 	"log"
 	"os"
 
+	"github.com/agcpomps/iherb-commerce/internal/db"
+	"github.com/agcpomps/iherb-commerce/internal/products"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
 
 func main() {
+
+	pool, err := db.NewPool()
+	if err != nil {
+		log.Fatal(err)
+	}
 	e := echo.New()
 	e.Use(middleware.RequestLogger())
 
@@ -18,6 +25,9 @@ func main() {
 		})
 	})
 
+	repo := products.NewRepository(pool)
+	handler := products.NewHandler(repo)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -25,8 +35,11 @@ func main() {
 
 	log.Println("API running on port", port)
 
-	if err := e.Start(":" + port); err != nil {
+	if err := e.Start("0.0.0.0:" + port); err != nil {
 		e.Logger.Error("failed to start server", "error", err)
 	}
+
+	api := e.Group("/api/v1")
+	products.RegisterRoutes(api, handler)
 
 }
