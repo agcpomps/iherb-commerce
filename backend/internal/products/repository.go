@@ -26,6 +26,7 @@ func (r *Repository) Create(ctx context.Context, p *Product) error {
 		p.Category,
 		p.MarginPercent,
 		p.Active,
+		p.ImagePath,
 	)
 
 	return err
@@ -68,4 +69,65 @@ func (r *Repository) List(ctx context.Context) ([]Product, error) {
 
 	return products, nil
 
+}
+
+func (r *Repository) GetByID(ctx context.Context, id string) (*Product, error) {
+	query := `
+		SELECT id, name, sku, category, margin_percent, active, created_at, image_path
+		FROM products
+		WHERE id = $1
+	`
+	var p Product
+
+	err := r.DB.QueryRow(ctx, query, id).Scan(
+		&p.ID,
+		&p.Name,
+		&p.SKU,
+		&p.Category,
+		&p.MarginPercent,
+		&p.Active,
+		&p.CreatedAt,
+		&p.ImagePath,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &p, nil
+
+}
+
+func (r *Repository) Update(ctx context.Context, p *Product) error {
+	query := `
+		UPDATE products
+		SET name = $1,
+		    sku = $2,
+		    category = $3,
+		    margin_percent = $4,
+		    active = $5
+			image_path = &6
+		WHERE id = $7
+	`
+	_, err := r.DB.Exec(ctx, query,
+		p.Name,
+		p.SKU,
+		p.Category,
+		p.MarginPercent,
+		p.Active,
+		p.ImagePath,
+		p.ID,
+	)
+
+	return err
+}
+
+func (r *Repository) Deactivate(ctx context.Context, id string) error {
+	query := `
+		UPDATE products
+		SET active = false
+		WHERE id = $1
+	`
+	_, err := r.DB.Exec(ctx, query, id)
+	return err
 }

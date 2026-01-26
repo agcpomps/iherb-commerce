@@ -27,6 +27,8 @@ func main() {
 
 	repo := products.NewRepository(pool)
 	handler := products.NewHandler(repo)
+	api := e.Group("/api/v1")
+	products.RegisterRoutes(api, handler)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -38,8 +40,5 @@ func main() {
 	if err := e.Start("0.0.0.0:" + port); err != nil {
 		e.Logger.Error("failed to start server", "error", err)
 	}
-
-	api := e.Group("/api/v1")
-	products.RegisterRoutes(api, handler)
 
 }
