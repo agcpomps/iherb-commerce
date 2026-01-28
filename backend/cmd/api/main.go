@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/agcpomps/iherb-commerce/internal/boxes"
 	"github.com/agcpomps/iherb-commerce/internal/db"
 	"github.com/agcpomps/iherb-commerce/internal/products"
 	"github.com/labstack/echo/v5"
@@ -27,8 +28,12 @@ func main() {
 
 	repo := products.NewRepository(pool)
 	handler := products.NewHandler(repo)
+	boxRepo := boxes.NewRepository(pool)
+	boxHandler := boxes.NewHandler(boxRepo)
+
 	api := e.Group("/api/v1")
 	products.RegisterRoutes(api, handler)
+	boxes.RegisterRoutes(api, boxHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {
