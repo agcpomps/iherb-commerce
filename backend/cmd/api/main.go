@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/agcpomps/iherb-commerce/internal/batches"
 	"github.com/agcpomps/iherb-commerce/internal/boxes"
 	"github.com/agcpomps/iherb-commerce/internal/db"
 	"github.com/agcpomps/iherb-commerce/internal/products"
@@ -30,10 +31,22 @@ func main() {
 	handler := products.NewHandler(repo)
 	boxRepo := boxes.NewRepository(pool)
 	boxHandler := boxes.NewHandler(boxRepo)
+	batchRepo := batches.NewRepository(pool)
+	batchHandler := batches.NewHandler(batchRepo, func(c *echo.Context, boxID string) (float64, error) {
+		var rate float64
+		err := pool.QueryRow(
+			c.Request().Context(),
+			"SELECT exchange_rate_usd_aoa FROM boxes WHERE id = $1",
+			boxID,
+		).Scan(&rate)
+
+		return rate, err
+	})
 
 	api := e.Group("/api/v1")
 	products.RegisterRoutes(api, handler)
 	boxes.RegisterRoutes(api, boxHandler)
+	batches.RegisterRoute(api, batchHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {
