@@ -4,10 +4,14 @@ import (
 	"log"
 	"os"
 
+	"github.com/agcpomps/iherb-commerce/internal/admin"
 	"github.com/agcpomps/iherb-commerce/internal/batches"
 	"github.com/agcpomps/iherb-commerce/internal/boxes"
 	"github.com/agcpomps/iherb-commerce/internal/db"
+	"github.com/agcpomps/iherb-commerce/internal/orders"
 	"github.com/agcpomps/iherb-commerce/internal/products"
+	"github.com/agcpomps/iherb-commerce/internal/sales"
+	"github.com/agcpomps/iherb-commerce/internal/store"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -42,11 +46,33 @@ func main() {
 
 		return rate, err
 	})
-
+	orderRepo := orders.NewRepository()
+	salesService := &sales.Service{
+		DB:          pool,
+		BatchesRepo: batchRepo,
+	}
+	storeHandler := store.NewHandler(pool, repo, orderRepo, salesService)
 	api := e.Group("/api/v1")
 	products.RegisterRoutes(api, handler)
 	boxes.RegisterRoutes(api, boxHandler)
 	batches.RegisterRoute(api, batchHandler)
+
+	// store register
+	products.RegisterStoreRoutes(api, handler)
+	store.RegisterRoutes(api, storeHandler)
+
+	// admin
+	adminOrdersHandler := &admin.OrdersHandler{
+		DB:         pool,
+		OrdersRepo: orderRepo,
+	}
+
+	productsHandler := &admin.ProductsHandler{
+		DB:          pool,
+		ProductRepo: repo,
+	}
+
+	admin.RegisterRoutes(api, adminOrdersHandler, productsHandler, os.Getenv("ADMIN_API_KEY"))
 
 	port := os.Getenv("PORT")
 	if port == "" {

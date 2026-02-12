@@ -131,3 +131,70 @@ func (r *Repository) Deactivate(ctx context.Context, id string) error {
 	_, err := r.DB.Exec(ctx, query, id)
 	return err
 }
+
+func (r *Repository) ListForStore(ctx context.Context) ([]StoreProduct, error) {
+	rows, err := r.DB.Query(ctx, `
+		SELECT
+		  p.id,
+		  p.name,
+		  p.image_path,
+		  p.margin_percent,
+		  COALESCE(SUM(b.quantity_available), 0) AS available_quantity,
+		  (
+		    SELECT b2.landed_cost_aoa
+		    FROM batches b2
+		    WHERE b2.product_id = p.id
+		      AND b2.status = 'active'
+		      AND b2.quantity_available > 0
+		      AND b2.expiration_date >= CURRENT_DATE
+		    ORDER BY b2.expiration_date ASC, b2.created_at ASC
+		    LIMIT 1
+		  ) AS fifo_cost_aoa
+		FROM products p
+		LEFT JOIN batches b
+		  ON b.product_id = p.id
+		 AND b.status = 'active'
+		 AND b.expiration_date >= CURRENT_DATE
+		WHERE p.active = true
+		GROUP BY p.id
+	`)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var result []StoreProduct
+
+	for rows.Next() {
+		var (
+			p       StoreProduct
+			margin  float64
+			CostAOA *float64
+		)
+
+		if err := rows.Scan(
+			&p.ID,
+			&p.Name,
+			&p.ImagePath,
+			&margin,
+			&p.AvailableQuantity,
+			&CostAOA,
+		); err != nil {
+			return nil, err
+		}
+
+		if CostAOA != nil {
+			p.PriceAOA = (*CostAOA) * (1 + (margin / 100))
+			p.InStock = p.AvailableQuantity > 0
+		} else {
+			p.PriceAOA = 0
+			p.InStock = false
+		}
+
+		result = append(result, p)
+	}
+
+	return result, nil
+}

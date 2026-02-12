@@ -12,3 +12,12 @@ type Product struct {
 	CreatedAt     time.Time `json:"created_at"`
 	ImagePath     string    `json:"image_path"`
 }
+
+type StoreProduct struct {
+	ID                string  `json:"id"`
+	Name              string  `json:"name"`
+	ImagePath         string  `json:"image_path"`
+	PriceAOA          float64 `json:"price_aoa"`
+	AvailableQuantity int     `json:"available_quantity"`
+	InStock           bool    `json:"in_stock"`
+}

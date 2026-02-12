@@ -1,11 +1,15 @@
 package batches
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Bacth struct {
-	ID                string    `json:"id"`
-	ProductID         string    `json:"product_id"`
-	BoxID             string    `json:"box_id"`
+	ID                uuid.UUID `json:"id"`
+	ProductID         uuid.UUID `json:"product_id"`
+	BoxID             uuid.UUID `json:"box_id"`
 	QuantityReceived  int       `json:"quantity_received"`
 	QuantityAvailable int       `json:"quantity_available"`
 	ExpirationDate    time.Time `json:"expiration_date"`

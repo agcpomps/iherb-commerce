@@ -32,6 +32,20 @@ func (h *Handler) Create(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, err)
 	}
 
+	productID, err := uuid.Parse(input.ProductID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid product_id",
+		})
+	}
+
+	boxID, err := uuid.Parse(input.BoxID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid box_id",
+		})
+	}
+
 	exchangeRate, err := h.BoxGetter(c, input.BoxID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, err)
@@ -42,9 +56,9 @@ func (h *Handler) Create(c *echo.Context) error {
 	landedAOA := landedUSD * exchangeRate
 
 	batch := Bacth{
-		ID:                uuid.NewString(),
-		ProductID:         input.ProductID,
-		BoxID:             input.BoxID,
+		ID:                uuid.New(),
+		ProductID:         productID,
+		BoxID:             boxID,
 		QuantityReceived:  input.QuantityReceived,
 		QuantityAvailable: input.QuantityReceived,
 		ExpirationDate:    input.ExpirationDate,

@@ -9,3 +9,7 @@ func RegisterRoutes(e *echo.Group, h *Handler) {
 	e.PUT("/products/:id", h.Update)
 	e.DELETE("/products/:id", h.Deactivate)
 }
+
+func RegisterStoreRoutes(e *echo.Group, h *Handler) {
+	e.GET("/store/products", h.ListForStore)
+}

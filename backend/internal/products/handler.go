@@ -82,3 +82,13 @@ func (h *Handler) Deactivate(c *echo.Context) error {
 
 	return c.NoContent(http.StatusNoContent)
 }
+
+// store Handlers
+func (h *Handler) ListForStore(c *echo.Context) error {
+	products, err := h.Repo.ListForStore(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, products)
+}

@@ -3,6 +3,7 @@ package batches
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -73,7 +74,7 @@ func (r *Repository) GetFIFOForProduct(
 func (r *Repository) DecreaseStock(
 	ctx context.Context,
 	tx pgx.Tx,
-	batchID string,
+	batchID uuid.UUID,
 	quantity int,
 ) error {
 	_, err := tx.Exec(ctx, `

@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"github.com/agcpomps/iherb-commerce/internal/batches"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -14,22 +16,17 @@ type Service struct {
 }
 
 type SaleItem struct {
-	BatchID  string
+	BatchID  uuid.UUID
 	Quantity int
 	CostAOA  float64
 }
 
 func (s *Service) SellProductFIFO(
 	ctx context.Context,
+	tx pgx.Tx,
 	productID string,
 	quatity int,
 ) ([]SaleItem, error) {
-	tx, err := s.DB.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-
 	batches, err := s.BatchesRepo.GetFIFOForProduct(ctx, tx, productID)
 	if err != nil {
 		return nil, err
@@ -56,17 +53,20 @@ func (s *Service) SellProductFIFO(
 		})
 
 		remaining -= toSell
-	}
 
-	if remaining > 0 {
-		return nil, errors.New("stock insuficiente")
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
+		if remaining > 0 {
+			return nil, errors.New("stock insuficiente")
+		}
 	}
 
 	return sold, nil
+}
+
+func (s *Service) ExpireBatchesWithTx(
+	ctx context.Context,
+	tx pgx.Tx,
+) (int, error) {
+	return s.BatchesRepo.ExpireOldBatches(ctx, tx)
 }
 
 func (s *Service) ExpireBatches(ctx context.Context) (int, error) {
@@ -87,4 +87,12 @@ func (s *Service) ExpireBatches(ctx context.Context) (int, error) {
 	}
 
 	return affected, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+
+	return b
 }
