@@ -72,7 +72,11 @@ func main() {
 		ProductRepo: repo,
 	}
 
-	admin.RegisterRoutes(api, adminOrdersHandler, productsHandler, os.Getenv("ADMIN_API_KEY"))
+	boxesHandler := &admin.BoxesHandler{
+		BoxesRepo: boxRepo,
+	}
+
+	admin.RegisterRoutes(api, adminOrdersHandler, productsHandler, boxesHandler, os.Getenv("ADMIN_API_KEY"))
 
 	port := os.Getenv("PORT")
 	if port == "" {
