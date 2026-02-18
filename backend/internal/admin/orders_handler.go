@@ -3,14 +3,16 @@ package admin
 import (
 	"net/http"
 
+	"github.com/agcpomps/iherb-commerce/internal/batches"
 	"github.com/agcpomps/iherb-commerce/internal/orders"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v5"
 )
 
 type OrdersHandler struct {
-	DB         *pgxpool.Pool
-	OrdersRepo *orders.Repository
+	DB          *pgxpool.Pool
+	OrdersRepo  *orders.Repository
+	BatchesRepo *batches.Repository
 }
 
 func (h *OrdersHandler) ConfirmPayment(c *echo.Context) error {
@@ -25,6 +27,21 @@ func (h *OrdersHandler) ConfirmPayment(c *echo.Context) error {
 	}
 
 	defer tx.Rollback(ctx)
+
+	items, err := h.OrdersRepo.ListItems(ctx, tx, orderID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "failed to load order items",
+		})
+	}
+
+	for _, item := range items {
+		if err := h.BatchesRepo.DecreaseStock(ctx, tx, item.BatchID, item.Quantity); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "insufficient stock to confirm this order",
+			})
+		}
+	}
 
 	err = h.OrdersRepo.MarkAsPaid(ctx, tx, orderID)
 	if err != nil {
@@ -48,7 +65,7 @@ func (h *OrdersHandler) ConfirmPayment(c *echo.Context) error {
 func (h *OrdersHandler) ListOrders(c *echo.Context) error {
 	ctx := c.Request().Context()
 
-	status := c.QueryParam("sstatus")
+	status := c.QueryParam("status")
 
 	tx, err := h.DB.Begin(ctx)
 	if err != nil {

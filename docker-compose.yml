@@ -37,7 +37,7 @@ services:
     depends_on:
       - api
     ports:
-      - "8080:3000"
+      - "8080:4321"
     networks:
       - app_net
     volumes:

@@ -1,0 +1,420 @@
+---
+import MainLayout from "../../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Admin Products">
+    <main class="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10 lg:px-8">
+      <div class="grid w-full gap-8 lg:grid-cols-5">
+        <section class="lg:col-span-2">
+          <div class="rounded-3xl bg-slate-900 p-8 text-slate-100 shadow-2xl shadow-slate-300/50">
+            <p class="text-xs uppercase tracking-[0.2em] text-cyan-300">iHerb Commerce</p>
+            <h1 class="mt-4 text-3xl font-semibold leading-tight">Create Product</h1>
+            <p class="mt-3 text-sm text-slate-300">
+              Add a new product directly into the admin catalog. This form sends data to
+              <code class="rounded bg-slate-800 px-1.5 py-0.5 text-cyan-300">/api/v1/admin/products</code>.
+            </p>
+            <div class="mt-8 space-y-4 text-sm text-slate-300">
+              <div class="flex items-start gap-3">
+                <span class="badge badge-info badge-sm mt-0.5"></span>
+                <p>Keep SKU unique and consistent with your inventory system.</p>
+              </div>
+              <div class="flex items-start gap-3">
+                <span class="badge badge-success badge-sm mt-0.5"></span>
+                <p>Margin percent is stored as a number, e.g. 25 for 25%.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="lg:col-span-3">
+          <div class="mb-4 flex flex-wrap gap-2">
+            <a class="btn btn-outline btn-sm" href="/admin/products">Products</a>
+            <a class="btn btn-outline btn-sm" href="/admin/boxes">Boxes</a>
+            <a class="btn btn-outline btn-sm" href="/admin/batches">Batches</a>
+            <a class="btn btn-outline btn-sm" href="/admin/orders">Orders</a>
+            <button id="logout-btn" class="btn btn-ghost btn-sm text-red-600" type="button">Logout</button>
+          </div>
+          <form id="create-product-form" class="card border border-white/60 bg-white/90 backdrop-blur">
+            <div class="card-body gap-5">
+              <h2 class="card-title text-2xl">New Product Details</h2>
+
+              <label class="form-control w-full">
+                <span class="label-text font-medium">Product Name</span>
+                <input name="name" class="input input-bordered w-full" placeholder="Organic Vitamin C" required />
+              </label>
+
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label class="form-control">
+                  <span class="label-text font-medium">SKU</span>
+                  <input name="sku" class="input input-bordered" placeholder="VITC-001" required />
+                </label>
+
+                <label class="form-control">
+                  <span class="label-text font-medium">Category</span>
+                  <input name="category" class="input input-bordered" placeholder="Vitamins" />
+                </label>
+              </div>
+
+              <label class="form-control w-full">
+                <span class="label-text font-medium">Description (Optional)</span>
+                <textarea
+                  name="description"
+                  class="textarea textarea-bordered w-full"
+                  placeholder="Short product description"
+                ></textarea>
+              </label>
+
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label class="form-control">
+                  <span class="label-text font-medium">Margin Percent</span>
+                  <input
+                    name="margin_percent"
+                    type="number"
+                    step="0.01"
+                    class="input input-bordered"
+                    placeholder="25"
+                  />
+                </label>
+
+                <label class="form-control">
+                  <span class="label-text font-medium">Image Path</span>
+                  <input
+                    id="image-path-input"
+                    name="image_path"
+                    class="input input-bordered"
+                    placeholder="/uploads/products/example.png"
+                  />
+                </label>
+              </div>
+
+              <label class="form-control">
+                <span class="label-text font-medium">Upload Image</span>
+                <div class="flex gap-2">
+                  <input id="image-file-input" type="file" accept=".jpg,.jpeg,.png,.webp" class="file-input file-input-bordered w-full" />
+                  <button id="upload-image-btn" type="button" class="btn btn-outline">Upload</button>
+                </div>
+                <span id="image-upload-status" class="mt-1 text-xs text-slate-500"></span>
+              </label>
+
+              <label class="label w-fit cursor-pointer gap-3">
+                <input name="active" type="checkbox" class="checkbox checkbox-success" checked />
+                <span class="label-text font-medium">Active Product</span>
+              </label>
+
+              <div class="card-actions mt-2">
+                <button id="submit-btn" type="submit" class="btn btn-primary">Create Product</button>
+                <span id="status" class="text-sm text-slate-500"></span>
+              </div>
+            </div>
+          </form>
+
+          <section class="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex items-center justify-between">
+              <h3 class="text-lg font-semibold text-slate-900">Existing Products</h3>
+              <button id="refresh-products-btn" class="btn btn-outline btn-sm" type="button">Refresh</button>
+            </div>
+            <p id="products-status" class="mb-3 text-sm text-slate-500"></p>
+            <div class="overflow-x-auto">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>SKU</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Margin %</th>
+                    <th>Active</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="products-table-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const API_URL = "http://localhost:8081/api/v1";
+      const ADMIN_KEY_STORAGE = "bgs_admin_api_key";
+      const form = document.getElementById("create-product-form");
+      const status = document.getElementById("status");
+      const submitBtn = document.getElementById("submit-btn");
+      const logoutBtn = document.getElementById("logout-btn");
+      const imagePathInput = document.getElementById("image-path-input");
+      const imageFileInput = document.getElementById("image-file-input");
+      const uploadImageBtn = document.getElementById("upload-image-btn");
+      const imageUploadStatus = document.getElementById("image-upload-status");
+      const refreshBtn = document.getElementById("refresh-products-btn");
+      const productsStatus = document.getElementById("products-status");
+      const productsTableBody = document.getElementById("products-table-body");
+
+      const apiKey = sessionStorage.getItem(ADMIN_KEY_STORAGE);
+      if (!apiKey) {
+        window.location.href = "/admin";
+      }
+
+      logoutBtn?.addEventListener("click", () => {
+        sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+        window.location.href = "/admin";
+      });
+
+      const requestWithAdminKey = async (path, options = {}) => {
+        const baseHeaders = { "X-API-KEY": apiKey };
+        const providedHeaders = options.headers || {};
+        const response = await fetch(`${API_URL}${path}`, {
+          ...options,
+          headers: {
+            ...baseHeaders,
+            ...providedHeaders,
+          },
+        });
+
+        if (response.status === 401) {
+          sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+          window.location.href = "/admin";
+          return null;
+        }
+
+        return response;
+      };
+
+      const toNullableString = (value) => {
+        const text = String(value || "").trim();
+        return text ? text : null;
+      };
+
+      uploadImageBtn?.addEventListener("click", async () => {
+        if (!(imageFileInput instanceof HTMLInputElement)) return;
+        if (!(imagePathInput instanceof HTMLInputElement)) return;
+        if (!(imageUploadStatus instanceof HTMLElement)) return;
+
+        const file = imageFileInput.files?.[0];
+        if (!file) {
+          imageUploadStatus.textContent = "Choose an image first.";
+          imageUploadStatus.className = "mt-1 text-xs text-error";
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("image", file);
+
+        uploadImageBtn.setAttribute("disabled", "true");
+        imageUploadStatus.textContent = "Uploading image...";
+        imageUploadStatus.className = "mt-1 text-xs text-slate-500";
+
+        try {
+          const response = await requestWithAdminKey("/admin/uploads/products", {
+            method: "POST",
+            body: formData,
+          });
+          if (!response) return;
+
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            imageUploadStatus.textContent = data.error || "Failed to upload image.";
+            imageUploadStatus.className = "mt-1 text-xs text-error";
+            return;
+          }
+
+          imagePathInput.value = String(data.image_path || "");
+          imageUploadStatus.textContent = "Image uploaded.";
+          imageUploadStatus.className = "mt-1 text-xs text-success";
+        } catch {
+          imageUploadStatus.textContent = "Upload failed. Check API availability.";
+          imageUploadStatus.className = "mt-1 text-xs text-error";
+        } finally {
+          uploadImageBtn.removeAttribute("disabled");
+        }
+      });
+
+      const renderProducts = (items) => {
+        if (!Array.isArray(items) || items.length === 0) {
+          productsTableBody.innerHTML = '<tr><td colspan="7" class="text-slate-500">No products found.</td></tr>';
+          return;
+        }
+
+        productsTableBody.innerHTML = items
+          .map(
+            (item) => `
+              <tr>
+                <td>${item.name || ""}</td>
+                <td>${item.sku || ""}</td>
+                <td>${item.category || ""}</td>
+                <td>${item.description || ""}</td>
+                <td>${Number(item.margin_percent || 0).toFixed(2)}</td>
+                <td>${item.active ? "Yes" : "No"}</td>
+                <td class="flex gap-2">
+                  <button class="btn btn-xs btn-outline edit-product-btn" data-id="${item.id}" data-image-path="${item.image_path || ""}">Edit</button>
+                  <button class="btn btn-xs btn-error delete-product-btn" data-id="${item.id}">Delete</button>
+                </td>
+              </tr>
+            `
+          )
+          .join("");
+      };
+
+      const loadProducts = async () => {
+        productsStatus.textContent = "Loading products...";
+        const response = await requestWithAdminKey("/admin/products", { method: "GET" });
+        if (!response) return;
+
+        const data = await response.json().catch(() => []);
+        if (!response.ok) {
+          productsStatus.textContent = "Failed to load products.";
+          productsStatus.className = "mb-3 text-sm text-error";
+          return;
+        }
+
+        renderProducts(data);
+        productsStatus.textContent = `${Array.isArray(data) ? data.length : 0} products loaded.`;
+        productsStatus.className = "mb-3 text-sm text-slate-500";
+      };
+
+      form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(form);
+        const payload = {
+          name: String(formData.get("name") || ""),
+          sku: String(formData.get("sku") || ""),
+          category: String(formData.get("category") || ""),
+          description: toNullableString(formData.get("description")),
+          margin_percent: Number(formData.get("margin_percent") || 0),
+          image_path: String(formData.get("image_path") || ""),
+          active: formData.get("active") === "on",
+        };
+
+        status.textContent = "Creating product...";
+        submitBtn?.setAttribute("disabled", "true");
+
+        try {
+          const response = await requestWithAdminKey("/admin/products", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+          if (!response) return;
+
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            status.textContent = data.error || "Failed to create product.";
+            status.className = "text-sm text-error";
+            return;
+          }
+
+          status.textContent = `Created: ${data.name || payload.name}`;
+          status.className = "text-sm text-success";
+          form.reset();
+          if (imageUploadStatus instanceof HTMLElement) {
+            imageUploadStatus.textContent = "";
+          }
+          loadProducts();
+        } catch {
+          status.textContent = "Request failed. Check API availability.";
+          status.className = "text-sm text-error";
+        } finally {
+          submitBtn?.removeAttribute("disabled");
+        }
+      });
+
+      refreshBtn?.addEventListener("click", () => {
+        loadProducts();
+      });
+
+      productsTableBody?.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+
+        const editBtn = target.closest(".edit-product-btn");
+        if (editBtn instanceof HTMLElement) {
+          const id = editBtn.dataset.id;
+          if (!id) return;
+
+          const currentRow = editBtn.closest("tr");
+          const cells = currentRow?.querySelectorAll("td");
+          const currentName = cells?.[0]?.textContent || "";
+          const currentSKU = cells?.[1]?.textContent || "";
+          const currentCategory = cells?.[2]?.textContent || "";
+          const currentDescription = cells?.[3]?.textContent || "";
+          const currentMargin = cells?.[4]?.textContent || "0";
+
+          const name = prompt("Name:", currentName);
+          if (name === null || !name.trim()) return;
+          const sku = prompt("SKU:", currentSKU);
+          if (sku === null || !sku.trim()) return;
+          const category = prompt("Category:", currentCategory);
+          if (category === null) return;
+          const description = prompt("Description (optional):", currentDescription);
+          if (description === null) return;
+          const marginRaw = prompt("Margin percent:", currentMargin);
+          if (marginRaw === null) return;
+          const currentImagePath = editBtn.dataset.imagePath || "";
+          const imagePath = prompt("Image path:", currentImagePath);
+          if (imagePath === null) return;
+          const active = confirm("Product active? OK = yes, Cancel = no");
+
+          const payload = {
+            name: name.trim(),
+            sku: sku.trim(),
+            category: category.trim(),
+            description: toNullableString(description),
+            margin_percent: Number(marginRaw || 0),
+            image_path: imagePath.trim(),
+            active: active,
+          };
+
+          productsStatus.textContent = "Updating product...";
+          const response = await requestWithAdminKey(`/admin/products/${id}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+          if (!response) return;
+
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            productsStatus.textContent = data.error || "Failed to update product.";
+            productsStatus.className = "mb-3 text-sm text-error";
+            return;
+          }
+
+          productsStatus.textContent = `Updated: ${data.name || payload.name}`;
+          productsStatus.className = "mb-3 text-sm text-success";
+          loadProducts();
+          return;
+        }
+
+        const deleteBtn = target.closest(".delete-product-btn");
+        if (deleteBtn instanceof HTMLElement) {
+          const id = deleteBtn.dataset.id;
+          if (!id) return;
+
+          if (!confirm("Delete this product? It will be deactivated.")) return;
+
+          productsStatus.textContent = "Deleting product...";
+          const response = await requestWithAdminKey(`/admin/products/${id}`, {
+            method: "DELETE",
+          });
+          if (!response) return;
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            productsStatus.textContent = data.error || "Failed to delete product.";
+            productsStatus.className = "mb-3 text-sm text-error";
+            return;
+          }
+
+          productsStatus.textContent = "Product deleted.";
+          productsStatus.className = "mb-3 text-sm text-success";
+          loadProducts();
+        }
+      });
+
+      loadProducts();
+    </script>
+</MainLayout>

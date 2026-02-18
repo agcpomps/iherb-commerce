@@ -1,0 +1,83 @@
+---
+import MainLayout from "../../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Admin Login">
+  <main class="mx-auto flex min-h-screen max-w-md items-center px-4 py-10">
+    <section class="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+      <h1 class="text-2xl font-semibold text-slate-900">Admin Login</h1>
+      <p class="mt-2 text-sm text-slate-600">Acesso protegido para rotas administrativas.</p>
+
+      <form id="admin-login-form" class="mt-5 space-y-4">
+        <label class="form-control">
+          <span class="label-text">Admin API Key</span>
+          <input
+            id="admin-api-key"
+            class="input input-bordered"
+            type="password"
+            placeholder="Insere a chave"
+            autocomplete="current-password"
+            required
+          />
+        </label>
+
+        <button id="login-btn" class="btn btn-primary w-full" type="submit">Entrar</button>
+        <p id="status" class="text-sm text-slate-600"></p>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    const API_URL = "http://localhost:8081/api/v1";
+    const ADMIN_KEY_STORAGE = "bgs_admin_api_key";
+
+    const form = document.getElementById("admin-login-form");
+    const keyInput = document.getElementById("admin-api-key");
+    const loginBtn = document.getElementById("login-btn");
+    const status = document.getElementById("status");
+
+    const setStatus = (message, tone = "info") => {
+      status.textContent = message;
+      status.className = `text-sm ${tone === "error" ? "text-error" : "text-slate-600"}`;
+    };
+
+    const verifyKey = async (apiKey) => {
+      const response = await fetch(`${API_URL}/admin/orders`, {
+        method: "GET",
+        headers: {
+          "X-API-KEY": apiKey,
+        },
+      });
+
+      return response.ok;
+    };
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const apiKey = String(keyInput?.value || "").trim();
+      if (!apiKey) {
+        setStatus("API key obrigatoria.", "error");
+        return;
+      }
+
+      setStatus("A validar chave...");
+      loginBtn?.setAttribute("disabled", "true");
+
+      try {
+        const ok = await verifyKey(apiKey);
+        if (!ok) {
+          setStatus("Chave invalida.", "error");
+          return;
+        }
+
+        sessionStorage.setItem(ADMIN_KEY_STORAGE, apiKey);
+        setStatus("Autenticado. A redirecionar...");
+        window.location.href = "/admin/products";
+      } catch {
+        setStatus("Falha ao validar chave. Confirma API e CORS.", "error");
+      } finally {
+        loginBtn?.removeAttribute("disabled");
+      }
+    });
+  </script>
+</MainLayout>

@@ -16,26 +16,32 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 
 func (r *Repository) Create(ctx context.Context, p *Product) error {
 	query := `
-	   INSERT INTO products (id, name, sku, category, margin_percent, active, image_path)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`
-	_, err := r.DB.Exec(ctx, query,
+  INSERT INTO products (
+    id, name, sku, category, description, margin_percent, active, image_path
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+  RETURNING created_at
+`
+
+	err := r.DB.QueryRow(ctx, query,
 		p.ID,
 		p.Name,
 		p.SKU,
 		p.Category,
+		p.Description,
 		p.MarginPercent,
 		p.Active,
 		p.ImagePath,
-	)
+	).Scan(&p.CreatedAt)
 
 	return err
 }
 
 func (r *Repository) List(ctx context.Context) ([]Product, error) {
 	rows, err := r.DB.Query(ctx, `
-		SELECT id, name, sku, category, margin_percent, active, created_at, image_path
+		SELECT id, name, sku, category, description, margin_percent, active, created_at, image_path
 		FROM products
+		WHERE active = true
 		ORDER BY created_at DESC
 	`)
 
@@ -54,6 +60,7 @@ func (r *Repository) List(ctx context.Context) ([]Product, error) {
 			&p.Name,
 			&p.SKU,
 			&p.Category,
+			&p.Description,
 			&p.MarginPercent,
 			&p.Active,
 			&p.CreatedAt,
@@ -73,7 +80,7 @@ func (r *Repository) List(ctx context.Context) ([]Product, error) {
 
 func (r *Repository) GetByID(ctx context.Context, id string) (*Product, error) {
 	query := `
-		SELECT id, name, sku, category, margin_percent, active, created_at, image_path
+		SELECT id, name, sku, category, description, margin_percent, active, created_at, image_path
 		FROM products
 		WHERE id = $1
 	`
@@ -84,6 +91,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Product, error) {
 		&p.Name,
 		&p.SKU,
 		&p.Category,
+		&p.Description,
 		&p.MarginPercent,
 		&p.Active,
 		&p.CreatedAt,
@@ -104,15 +112,17 @@ func (r *Repository) Update(ctx context.Context, p *Product) error {
 		SET name = $1,
 		    sku = $2,
 		    category = $3,
-		    margin_percent = $4,
-		    active = $5
-			image_path = &6
-		WHERE id = $7
+		    description = $4,
+		    margin_percent = $5,
+		    active = $6,
+			image_path = $7
+		WHERE id = $8
 	`
 	_, err := r.DB.Exec(ctx, query,
 		p.Name,
 		p.SKU,
 		p.Category,
+		p.Description,
 		p.MarginPercent,
 		p.Active,
 		p.ImagePath,
@@ -137,6 +147,7 @@ func (r *Repository) ListForStore(ctx context.Context) ([]StoreProduct, error) {
 		SELECT
 		  p.id,
 		  p.name,
+		  p.description,
 		  p.image_path,
 		  p.margin_percent,
 		  COALESCE(SUM(b.quantity_available), 0) AS available_quantity,
@@ -177,6 +188,7 @@ func (r *Repository) ListForStore(ctx context.Context) ([]StoreProduct, error) {
 		if err := rows.Scan(
 			&p.ID,
 			&p.Name,
+			&p.Description,
 			&p.ImagePath,
 			&margin,
 			&p.AvailableQuantity,

@@ -21,15 +21,21 @@ func NewHandler(repo *Repository, boxGetter func(ctx *echo.Context, boxID string
 
 func (h *Handler) Create(c *echo.Context) error {
 	var input struct {
-		ProductID        string    `json:"product_id"`
-		BoxID            string    `json:"box_id"`
-		QuantityReceived int       `json:"quantity_received"`
-		ExpirationDate   time.Time `json:"expiration_date"`
-		UnitPriceUSD     float64   `json:"unit_price_usd"`
+		ProductID        string  `json:"product_id"`
+		BoxID            string  `json:"box_id"`
+		QuantityReceived int     `json:"quantity_received"`
+		ExpirationDate   string  `json:"expiration_date"`
+		UnitPriceUSD     float64 `json:"unit_price_usd"`
 	}
 
 	if err := c.Bind(&input); err != nil {
 		return c.JSON(http.StatusBadRequest, err)
+	}
+
+	if input.QuantityReceived <= 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "quantity must be greater than zero",
+		})
 	}
 
 	productID, err := uuid.Parse(input.ProductID)
@@ -51,6 +57,13 @@ func (h *Handler) Create(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, err)
 	}
 
+	expDate, err := time.Parse("2006-01-02", input.ExpirationDate)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid expiration date format (YYYY-MM-DD)",
+		})
+	}
+
 	customs := input.UnitPriceUSD * CUSTOMS_RATE
 	landedUSD := input.UnitPriceUSD + customs
 	landedAOA := landedUSD * exchangeRate
@@ -61,7 +74,7 @@ func (h *Handler) Create(c *echo.Context) error {
 		BoxID:             boxID,
 		QuantityReceived:  input.QuantityReceived,
 		QuantityAvailable: input.QuantityReceived,
-		ExpirationDate:    input.ExpirationDate,
+		ExpirationDate:    expDate,
 		LandedCostUSD:     landedUSD,
 		LandedCostAOA:     landedAOA,
 		Status:            "active",

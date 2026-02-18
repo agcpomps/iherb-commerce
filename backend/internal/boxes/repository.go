@@ -129,3 +129,12 @@ func (r *Repository) Update(ctx context.Context, b *Box) error {
 
 	return err
 }
+
+func (r *Repository) Delete(ctx context.Context, id string) error {
+	_, err := r.DB.Exec(ctx, `
+		DELETE FROM boxes
+		WHERE id = $1
+	`, id)
+
+	return err
+}

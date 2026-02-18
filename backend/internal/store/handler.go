@@ -35,8 +35,8 @@ type CheckoutItemInput struct {
 }
 
 type CheckoutRequest struct {
-	Items        []CheckoutItemInput `json:"items"`
-	PaymentMehod string              `json:"payment_method"`
+	Items         []CheckoutItemInput `json:"items"`
+	PaymentMethod string              `json:"payment_method"`
 }
 
 func (h *Handler) Checkout(c *echo.Context) error {
@@ -50,7 +50,7 @@ func (h *Handler) Checkout(c *echo.Context) error {
 	}
 
 	// validate payment method
-	if req.PaymentMehod != "transfer_site" && req.PaymentMehod != "transfer_whatsapp" {
+	if req.PaymentMethod != "transfer_site" && req.PaymentMethod != "transfer_whatsapp" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "invalid payment method",
 		})
@@ -92,8 +92,8 @@ func (h *Handler) Checkout(c *echo.Context) error {
 			})
 		}
 
-		// FIFO (baixa stock)
-		sold, err := h.SalesService.SellProductFIFO(ctx, tx, item.ProductID, item.Quantity)
+		// FIFO preview (sem baixar stock no checkout)
+		sold, err := h.SalesService.PreviewProductFIFO(ctx, tx, item.ProductID, item.Quantity)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{
 				"error": err.Error(),
@@ -122,7 +122,7 @@ func (h *Handler) Checkout(c *echo.Context) error {
 	err = h.OrdersRepo.Create(ctx, tx, &orders.Order{
 		ID:             orderID,
 		TotalAmountAOA: totalAOA,
-		PaymentMethod:  req.PaymentMehod,
+		PaymentMethod:  req.PaymentMethod,
 		Status:         "pending_payment",
 	})
 	if err != nil {
@@ -153,8 +153,8 @@ func (h *Handler) Checkout(c *echo.Context) error {
 		"total_aoa": totalAOA,
 		"bank_details": map[string]string{
 			"bank":         "BAI",
-			"account_name": "IHerb Store Benguela",
-			"iban":         "AO06XXXXXXX",
+			"account_name": "Armindo Correia",
+			"iban":         "AO06 0040 0000 4639 8192 1013 4",
 		},
 		"instructions": []string{
 			"Faça a transferência do valor acima",
@@ -165,4 +165,17 @@ func (h *Handler) Checkout(c *echo.Context) error {
 		"email":        "vendas@seudominio.com",
 	})
 
+}
+
+func (h *Handler) ListProducts(c *echo.Context) error {
+	ctx := c.Request().Context()
+
+	products, err := h.ProductsRepo.ListForStore(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "failed to list products",
+		})
+	}
+
+	return c.JSON(http.StatusOK, products)
 }

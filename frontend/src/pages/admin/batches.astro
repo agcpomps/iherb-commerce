@@ -1,0 +1,193 @@
+---
+import MainLayout from "../../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Admin Batches">
+  <main class="mx-auto min-h-screen max-w-4xl px-4 py-10 lg:px-8">
+    <section class="rounded-2xl border border-cyan-100 bg-white p-6 shadow-md">
+      <h1 class="text-2xl font-semibold">Create Batch</h1>
+      <p class="mt-2 text-sm text-slate-600">Add stock entries linked to product and box UUIDs.</p>
+    </section>
+
+    <div class="mt-6 flex flex-wrap gap-2">
+      <a class="btn btn-outline btn-sm" href="/admin/products">Products</a>
+      <a class="btn btn-outline btn-sm" href="/admin/boxes">Boxes</a>
+      <a class="btn btn-outline btn-sm" href="/admin/batches">Batches</a>
+      <a class="btn btn-outline btn-sm" href="/admin/orders">Orders</a>
+      <button id="logout-btn" class="btn btn-ghost btn-sm text-red-600" type="button">Logout</button>
+    </div>
+
+    <form id="create-batch-form" class="mt-2 rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+      <div class="grid gap-4 md:grid-cols-2">
+        <label class="form-control md:col-span-2">
+          <span class="label-text">Product</span>
+          <select id="product-id" class="select select-bordered" name="product_id" required>
+            <option value="">Select a product</option>
+          </select>
+        </label>
+
+        <label class="form-control md:col-span-2">
+          <span class="label-text">Box</span>
+          <select id="box-id" class="select select-bordered" name="box_id" required>
+            <option value="">Select a box</option>
+          </select>
+        </label>
+
+        <label class="form-control">
+          <span class="label-text">Quantity Received</span>
+          <input class="input input-bordered" type="number" min="1" name="quantity_received" required />
+        </label>
+
+        <label class="form-control">
+          <span class="label-text">Expiration Date</span>
+          <input class="input input-bordered" type="date" name="expiration_date" required />
+        </label>
+
+        <label class="form-control">
+          <span class="label-text">Unit Price USD</span>
+          <input class="input input-bordered" type="number" min="0" step="0.01" name="unit_price_usd" required />
+        </label>
+      </div>
+
+      <div class="mt-5 flex items-center gap-3">
+        <button id="submit-btn" class="btn btn-primary" type="submit">Create Batch</button>
+        <span id="status" class="text-sm text-slate-600"></span>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    const API_URL = "http://localhost:8081/api/v1";
+    const ADMIN_KEY_STORAGE = "bgs_admin_api_key";
+    const form = document.getElementById("create-batch-form");
+    const status = document.getElementById("status");
+    const submitBtn = document.getElementById("submit-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const productSelect = document.getElementById("product-id");
+    const boxSelect = document.getElementById("box-id");
+
+    const apiKey = sessionStorage.getItem(ADMIN_KEY_STORAGE);
+    if (!apiKey) {
+      window.location.href = "/admin";
+    }
+
+    logoutBtn?.addEventListener("click", () => {
+      sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+      window.location.href = "/admin";
+    });
+
+    const requestWithAdminKey = async (path, options = {}) => {
+      const baseHeaders = { "X-API-KEY": apiKey };
+      const providedHeaders = options.headers || {};
+      const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: {
+          ...baseHeaders,
+          ...providedHeaders,
+        },
+      });
+
+      if (response.status === 401) {
+        sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+        window.location.href = "/admin";
+        return null;
+      }
+
+      return response;
+    };
+
+    const loadProducts = async () => {
+      if (!(productSelect instanceof HTMLSelectElement)) return;
+
+      const response = await requestWithAdminKey("/admin/products", { method: "GET" });
+      if (!response) return;
+
+      const items = await response.json().catch(() => []);
+      if (!response.ok || !Array.isArray(items)) {
+        status.textContent = "Failed to load products for selection.";
+        status.className = "text-sm text-error";
+        return;
+      }
+
+      productSelect.innerHTML = '<option value="">Select a product</option>';
+      items.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = String(item.id || "");
+        option.textContent = `${item.name || "Unnamed"} (${item.sku || "no-sku"})`;
+        productSelect.appendChild(option);
+      });
+    };
+
+    const loadBoxes = async () => {
+      if (!(boxSelect instanceof HTMLSelectElement)) return;
+
+      const response = await fetch(`${API_URL}/boxes`, { method: "GET" });
+      if (!response.ok) {
+        status.textContent = "Failed to load boxes for selection.";
+        status.className = "text-sm text-error";
+        return;
+      }
+
+      const items = await response.json().catch(() => []);
+      if (!Array.isArray(items)) {
+        status.textContent = "Invalid boxes response.";
+        status.className = "text-sm text-error";
+        return;
+      }
+
+      boxSelect.innerHTML = '<option value="">Select a box</option>';
+      items.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = String(item.id || "");
+        option.textContent = `${item.supplier_name || "Unnamed box"} (${item.id || ""})`;
+        boxSelect.appendChild(option);
+      });
+    };
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const payload = {
+        product_id: String(formData.get("product_id") || ""),
+        box_id: String(formData.get("box_id") || ""),
+        quantity_received: Number(formData.get("quantity_received") || 0),
+        expiration_date: String(formData.get("expiration_date") || ""),
+        unit_price_usd: Number(formData.get("unit_price_usd") || 0),
+      };
+
+      status.textContent = "Creating batch...";
+      status.className = "text-sm text-slate-600";
+      submitBtn?.setAttribute("disabled", "true");
+
+      try {
+        const response = await requestWithAdminKey("/admin/batches", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          status.textContent = data.error || "Failed to create batch.";
+          status.className = "text-sm text-error";
+          return;
+        }
+
+        status.textContent = `Created batch: ${data.id || "ok"}`;
+        status.className = "text-sm text-success";
+        form.reset();
+      } catch {
+        status.textContent = "Request failed. Check API availability.";
+        status.className = "text-sm text-error";
+      } finally {
+        submitBtn?.removeAttribute("disabled");
+      }
+    });
+
+    loadProducts();
+    loadBoxes();
+  </script>
+</MainLayout>

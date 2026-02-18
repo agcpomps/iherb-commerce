@@ -1,0 +1,188 @@
+---
+import MainLayout from "../../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Admin Orders">
+  <main class="mx-auto min-h-screen max-w-6xl px-4 py-10 lg:px-8">
+    <section class="rounded-2xl border border-cyan-100 bg-white p-6 shadow-md">
+      <h1 class="text-2xl font-semibold">Orders</h1>
+      <p class="mt-2 text-sm text-slate-600">Lista de pedidos e confirmação de pagamento.</p>
+    </section>
+
+    <div class="mt-6 flex flex-wrap gap-2">
+      <a class="btn btn-outline btn-sm" href="/admin/products">Products</a>
+      <a class="btn btn-outline btn-sm" href="/admin/boxes">Boxes</a>
+      <a class="btn btn-outline btn-sm" href="/admin/batches">Batches</a>
+      <a class="btn btn-outline btn-sm" href="/admin/orders">Orders</a>
+      <button id="logout-btn" class="btn btn-ghost btn-sm text-red-600" type="button">Logout</button>
+    </div>
+
+    <section class="mt-2 rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+      <div class="mb-4 flex flex-wrap items-center gap-2">
+        <select id="status-filter" class="select select-bordered select-sm">
+          <option value="">All statuses</option>
+          <option value="pending_payment">pending_payment</option>
+          <option value="paid">paid</option>
+        </select>
+        <button id="refresh-orders-btn" class="btn btn-outline btn-sm" type="button">Refresh</button>
+      </div>
+
+      <p id="orders-status" class="mb-3 text-sm text-slate-600"></p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Total (AOA)</th>
+              <th>Payment Method</th>
+              <th>Status</th>
+              <th>Created At</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API_URL = "http://localhost:8081/api/v1";
+    const ADMIN_KEY_STORAGE = "bgs_admin_api_key";
+    const logoutBtn = document.getElementById("logout-btn");
+    const refreshBtn = document.getElementById("refresh-orders-btn");
+    const statusFilter = document.getElementById("status-filter");
+    const ordersStatus = document.getElementById("orders-status");
+    const ordersTableBody = document.getElementById("orders-table-body");
+
+    const apiKey = sessionStorage.getItem(ADMIN_KEY_STORAGE);
+    if (!apiKey) {
+      window.location.href = "/admin";
+    }
+
+    logoutBtn?.addEventListener("click", () => {
+      sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+      window.location.href = "/admin";
+    });
+
+    const requestWithAdminKey = async (path, options = {}) => {
+      const baseHeaders = { "X-API-KEY": apiKey };
+      const providedHeaders = options.headers || {};
+      const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: {
+          ...baseHeaders,
+          ...providedHeaders,
+        },
+      });
+
+      if (response.status === 401) {
+        sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+        window.location.href = "/admin";
+        return null;
+      }
+
+      return response;
+    };
+
+    const formatDate = (value) => {
+      if (!value) return "-";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString();
+    };
+
+    const renderOrders = (items) => {
+      if (!Array.isArray(items) || items.length === 0) {
+        ordersTableBody.innerHTML = '<tr><td colspan="6" class="text-slate-500">No orders found.</td></tr>';
+        return;
+      }
+
+      ordersTableBody.innerHTML = items
+        .map((item) => {
+          const isPending = item.status === "pending_payment";
+          return `
+            <tr>
+              <td>${item.id || ""}</td>
+              <td>${Number(item.total_amount_aoa || 0).toFixed(2)}</td>
+              <td>${item.payment_method || ""}</td>
+              <td>${item.status || ""}</td>
+              <td>${formatDate(item.created_at)}</td>
+              <td>
+                ${
+                  isPending
+                    ? `<button class="btn btn-xs btn-success mark-paid-btn" data-id="${item.id}">Mark as paid</button>`
+                    : '<span class="text-slate-500">-</span>'
+                }
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+    };
+
+    const loadOrders = async () => {
+      ordersStatus.textContent = "Loading orders...";
+      ordersStatus.className = "mb-3 text-sm text-slate-600";
+
+      const status = statusFilter instanceof HTMLSelectElement ? statusFilter.value : "";
+      const query = status ? `?status=${encodeURIComponent(status)}` : "";
+      const response = await requestWithAdminKey(`/admin/orders${query}`, { method: "GET" });
+      if (!response) return;
+
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        ordersStatus.textContent = "Failed to load orders.";
+        ordersStatus.className = "mb-3 text-sm text-error";
+        return;
+      }
+
+      renderOrders(data);
+      ordersStatus.textContent = `${Array.isArray(data) ? data.length : 0} orders loaded.`;
+    };
+
+    const confirmPaid = async (orderID) => {
+      ordersStatus.textContent = `Confirming payment for ${orderID}...`;
+      ordersStatus.className = "mb-3 text-sm text-slate-600";
+
+      const response = await requestWithAdminKey(`/admin/orders/${orderID}/confirm-payment`, {
+        method: "POST",
+      });
+      if (!response) return;
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        ordersStatus.textContent = data.error || "Failed to confirm payment.";
+        ordersStatus.className = "mb-3 text-sm text-error";
+        return;
+      }
+
+      ordersStatus.textContent = `Order ${orderID} marked as paid.`;
+      ordersStatus.className = "mb-3 text-sm text-success";
+      loadOrders();
+    };
+
+    refreshBtn?.addEventListener("click", () => {
+      loadOrders();
+    });
+
+    statusFilter?.addEventListener("change", () => {
+      loadOrders();
+    });
+
+    ordersTableBody?.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      const actionBtn = target.closest(".mark-paid-btn");
+      if (!(actionBtn instanceof HTMLElement)) return;
+
+      const id = actionBtn.dataset.id;
+      if (!id) return;
+      if (!confirm(`Confirm payment for order ${id}?`)) return;
+      confirmPaid(id);
+    });
+
+    loadOrders();
+  </script>
+</MainLayout>

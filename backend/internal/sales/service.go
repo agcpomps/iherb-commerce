@@ -27,6 +27,26 @@ func (s *Service) SellProductFIFO(
 	productID string,
 	quatity int,
 ) ([]SaleItem, error) {
+	sold, err := s.PreviewProductFIFO(ctx, tx, productID, quatity)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range sold {
+		if err := s.BatchesRepo.DecreaseStock(ctx, tx, item.BatchID, item.Quantity); err != nil {
+			return nil, err
+		}
+	}
+
+	return sold, nil
+}
+
+func (s *Service) PreviewProductFIFO(
+	ctx context.Context,
+	tx pgx.Tx,
+	productID string,
+	quatity int,
+) ([]SaleItem, error) {
 	batches, err := s.BatchesRepo.GetFIFOForProduct(ctx, tx, productID)
 	if err != nil {
 		return nil, err
@@ -42,10 +62,6 @@ func (s *Service) SellProductFIFO(
 
 		toSell := min(b.QuantityAvailable, remaining)
 
-		if err := s.BatchesRepo.DecreaseStock(ctx, tx, b.ID, toSell); err != nil {
-			return nil, err
-		}
-
 		sold = append(sold, SaleItem{
 			BatchID:  b.ID,
 			Quantity: toSell,
@@ -53,10 +69,10 @@ func (s *Service) SellProductFIFO(
 		})
 
 		remaining -= toSell
+	}
 
-		if remaining > 0 {
-			return nil, errors.New("stock insuficiente")
-		}
+	if remaining > 0 {
+		return nil, errors.New("stock insuficiente")
 	}
 
 	return sold, nil

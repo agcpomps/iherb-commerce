@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/agcpomps/iherb-commerce/internal/admin"
@@ -24,12 +25,24 @@ func main() {
 	}
 	e := echo.New()
 	e.Use(middleware.RequestLogger())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"http://localhost:8080", "http://localhost:4321"},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders: []string{
+			echo.HeaderOrigin,
+			echo.HeaderContentType,
+			echo.HeaderAccept,
+			echo.HeaderXRequestedWith,
+			"X-API-KEY",
+		},
+	}))
 
-	e.GET("api/v1/health", func(c *echo.Context) error {
+	e.GET("/api/v1/health", func(c *echo.Context) error {
 		return c.JSON(200, map[string]string{
 			"status": "ok",
 		})
 	})
+	e.Static("/uploads", "uploads")
 
 	repo := products.NewRepository(pool)
 	handler := products.NewHandler(repo)
@@ -58,13 +71,14 @@ func main() {
 	batches.RegisterRoute(api, batchHandler)
 
 	// store register
-	products.RegisterStoreRoutes(api, handler)
 	store.RegisterRoutes(api, storeHandler)
+	store.RegisterRoutes(e.Group(""), storeHandler)
 
 	// admin
 	adminOrdersHandler := &admin.OrdersHandler{
-		DB:         pool,
-		OrdersRepo: orderRepo,
+		DB:          pool,
+		OrdersRepo:  orderRepo,
+		BatchesRepo: batchRepo,
 	}
 
 	productsHandler := &admin.ProductsHandler{
@@ -76,7 +90,11 @@ func main() {
 		BoxesRepo: boxRepo,
 	}
 
-	admin.RegisterRoutes(api, adminOrdersHandler, productsHandler, boxesHandler, os.Getenv("ADMIN_API_KEY"))
+	batchesHandler := &admin.BatchesHandler{
+		BatchHandler: batchHandler,
+	}
+
+	admin.RegisterRoutes(api, adminOrdersHandler, productsHandler, boxesHandler, batchesHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -1,0 +1,335 @@
+---
+import MainLayout from "../../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Admin Boxes">
+  <main class="mx-auto min-h-screen max-w-5xl px-4 py-10 lg:px-8">
+    <section class="rounded-2xl border border-cyan-100 bg-white p-6 shadow-md">
+      <h1 class="text-2xl font-semibold">Create Box</h1>
+      <p class="mt-2 text-sm text-slate-600">Create incoming shipment boxes for cost and stock tracking.</p>
+    </section>
+
+    <div class="mt-6 flex flex-wrap gap-2">
+      <a class="btn btn-outline btn-sm" href="/admin/products">Products</a>
+      <a class="btn btn-outline btn-sm" href="/admin/boxes">Boxes</a>
+      <a class="btn btn-outline btn-sm" href="/admin/batches">Batches</a>
+      <a class="btn btn-outline btn-sm" href="/admin/orders">Orders</a>
+      <button id="logout-btn" class="btn btn-ghost btn-sm text-red-600" type="button">Logout</button>
+    </div>
+
+    <form id="create-box-form" class="mt-2 rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+      <div class="grid gap-4 md:grid-cols-2">
+        <label class="form-control">
+          <span class="label-text">Supplier Name</span>
+          <input class="input input-bordered" name="supplier_name" required />
+        </label>
+
+        <label class="form-control">
+          <span class="label-text">Purchase Date</span>
+          <input class="input input-bordered" type="date" name="purchase_date" required />
+        </label>
+
+        <label class="form-control">
+          <span class="label-text">Exchange Rate USD/AOA</span>
+          <input class="input input-bordered" type="number" step="0.0001" min="0.0001" name="exchange_rate_usd_aoa" required />
+        </label>
+
+        <label class="form-control">
+          <span class="label-text">Status</span>
+          <select class="select select-bordered" name="status" required>
+            <option value="in_transit">in_transit</option>
+            <option value="arrived">arrived</option>
+          </select>
+        </label>
+
+        <label class="form-control">
+          <span class="label-text">Shipping USD</span>
+          <input class="input input-bordered" type="number" step="0.01" min="0" name="shipping_usd" value="0" />
+        </label>
+
+        <label class="form-control">
+          <span class="label-text">Customs Tax USD</span>
+          <input class="input input-bordered" type="number" step="0.01" min="0" name="customs_tax_usd" value="0" />
+        </label>
+
+        <label class="form-control md:col-span-2">
+          <span class="label-text">Other Costs USD</span>
+          <input class="input input-bordered" type="number" step="0.01" min="0" name="other_costs_usd" value="0" />
+        </label>
+      </div>
+
+      <div class="mt-5 flex items-center gap-3">
+        <button id="submit-btn" class="btn btn-primary" type="submit">Create Box</button>
+        <span id="status" class="text-sm text-slate-600"></span>
+      </div>
+    </form>
+
+    <section class="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="mb-3 flex items-center justify-between">
+        <h3 class="text-lg font-semibold text-slate-900">Existing Boxes</h3>
+        <button id="refresh-boxes-btn" class="btn btn-outline btn-sm" type="button">Refresh</button>
+      </div>
+      <p id="boxes-status" class="mb-3 text-sm text-slate-500"></p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Supplier</th>
+              <th>Purchase Date</th>
+              <th>Rate</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="boxes-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API_URL = "http://localhost:8081/api/v1";
+    const ADMIN_KEY_STORAGE = "bgs_admin_api_key";
+    const form = document.getElementById("create-box-form");
+    const status = document.getElementById("status");
+    const submitBtn = document.getElementById("submit-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const refreshBtn = document.getElementById("refresh-boxes-btn");
+    const boxesStatus = document.getElementById("boxes-status");
+    const boxesTableBody = document.getElementById("boxes-table-body");
+
+    const apiKey = sessionStorage.getItem(ADMIN_KEY_STORAGE);
+    if (!apiKey) {
+      window.location.href = "/admin";
+    }
+
+    logoutBtn?.addEventListener("click", () => {
+      sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+      window.location.href = "/admin";
+    });
+
+    const requestWithAdminKey = async (path, options = {}) => {
+      const baseHeaders = { "X-API-KEY": apiKey };
+      const providedHeaders = options.headers || {};
+      const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: {
+          ...baseHeaders,
+          ...providedHeaders,
+        },
+      });
+
+      if (response.status === 401) {
+        sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+        window.location.href = "/admin";
+        return null;
+      }
+
+      return response;
+    };
+
+    const formatDate = (value) => {
+      if (!value) return "";
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return "";
+      return d.toISOString().slice(0, 10);
+    };
+
+    const renderBoxes = (items) => {
+      if (!Array.isArray(items) || items.length === 0) {
+        boxesTableBody.innerHTML = '<tr><td colspan="5" class="text-slate-500">No boxes found.</td></tr>';
+        return;
+      }
+
+      boxesTableBody.innerHTML = items
+        .map(
+          (item) => `
+            <tr>
+              <td>${item.supplier_name || ""}</td>
+              <td>${formatDate(item.purchase_date)}</td>
+              <td>${Number(item.exchange_rate_usd_aoa || 0).toFixed(4)}</td>
+              <td>${item.status || ""}</td>
+              <td class="flex gap-2">
+                <button
+                  class="btn btn-xs btn-outline edit-box-btn"
+                  data-id="${item.id}"
+                  data-supplier-name="${item.supplier_name || ""}"
+                  data-purchase-date="${formatDate(item.purchase_date)}"
+                  data-rate="${Number(item.exchange_rate_usd_aoa || 0)}"
+                  data-shipping="${Number(item.shipping_usd || 0)}"
+                  data-customs="${Number(item.customs_tax_usd || 0)}"
+                  data-other="${Number(item.other_costs_usd || 0)}"
+                  data-status="${item.status || "in_transit"}"
+                >Edit</button>
+                <button class="btn btn-xs btn-error delete-box-btn" data-id="${item.id}">Delete</button>
+              </td>
+            </tr>
+          `
+        )
+        .join("");
+    };
+
+    const loadBoxes = async () => {
+      boxesStatus.textContent = "Loading boxes...";
+      boxesStatus.className = "mb-3 text-sm text-slate-500";
+
+      const response = await requestWithAdminKey("/admin/boxes", { method: "GET" });
+      if (!response) return;
+
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        boxesStatus.textContent = "Failed to load boxes.";
+        boxesStatus.className = "mb-3 text-sm text-error";
+        return;
+      }
+
+      renderBoxes(data);
+      boxesStatus.textContent = `${Array.isArray(data) ? data.length : 0} boxes loaded.`;
+    };
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const payload = {
+        supplier_name: String(formData.get("supplier_name") || ""),
+        purchase_date: String(formData.get("purchase_date") || ""),
+        exchange_rate_usd_aoa: Number(formData.get("exchange_rate_usd_aoa") || 0),
+        shipping_usd: Number(formData.get("shipping_usd") || 0),
+        customs_tax_usd: Number(formData.get("customs_tax_usd") || 0),
+        other_costs_usd: Number(formData.get("other_costs_usd") || 0),
+        status: String(formData.get("status") || "in_transit"),
+      };
+
+      status.textContent = "Creating box...";
+      status.className = "text-sm text-slate-600";
+      submitBtn?.setAttribute("disabled", "true");
+
+      try {
+        const response = await requestWithAdminKey("/admin/boxes", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          status.textContent = data.error || "Failed to create box.";
+          status.className = "text-sm text-error";
+          return;
+        }
+
+        status.textContent = `Created box: ${data.id || "ok"}`;
+        status.className = "text-sm text-success";
+        form.reset();
+        loadBoxes();
+      } catch {
+        status.textContent = "Request failed. Check API availability.";
+        status.className = "text-sm text-error";
+      } finally {
+        submitBtn?.removeAttribute("disabled");
+      }
+    });
+
+    refreshBtn?.addEventListener("click", () => {
+      loadBoxes();
+    });
+
+    boxesTableBody?.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      const editBtn = target.closest(".edit-box-btn");
+      if (editBtn instanceof HTMLElement) {
+        const id = editBtn.dataset.id;
+        if (!id) return;
+
+        const supplierName = prompt("Supplier name:", editBtn.dataset.supplierName || "");
+        if (supplierName === null || !supplierName.trim()) return;
+
+        const purchaseDate = prompt("Purchase date (YYYY-MM-DD):", editBtn.dataset.purchaseDate || "");
+        if (purchaseDate === null || !purchaseDate.trim()) return;
+
+        const rateRaw = prompt("Exchange rate USD/AOA:", editBtn.dataset.rate || "0");
+        if (rateRaw === null) return;
+
+        const shippingRaw = prompt("Shipping USD:", editBtn.dataset.shipping || "0");
+        if (shippingRaw === null) return;
+
+        const customsRaw = prompt("Customs Tax USD:", editBtn.dataset.customs || "0");
+        if (customsRaw === null) return;
+
+        const otherRaw = prompt("Other Costs USD:", editBtn.dataset.other || "0");
+        if (otherRaw === null) return;
+
+        const statusRaw = prompt("Status (in_transit|arrived):", editBtn.dataset.status || "in_transit");
+        if (statusRaw === null || !statusRaw.trim()) return;
+
+        boxesStatus.textContent = "Updating box...";
+        boxesStatus.className = "mb-3 text-sm text-slate-500";
+
+        const payload = {
+          supplier_name: supplierName.trim(),
+          purchase_date: purchaseDate.trim(),
+          exchange_rate_usd_aoa: Number(rateRaw || 0),
+          shipping_usd: Number(shippingRaw || 0),
+          customs_tax_usd: Number(customsRaw || 0),
+          other_costs_usd: Number(otherRaw || 0),
+          status: statusRaw.trim(),
+        };
+
+        const response = await requestWithAdminKey(`/admin/boxes/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          boxesStatus.textContent = data.error || "Failed to update box.";
+          boxesStatus.className = "mb-3 text-sm text-error";
+          return;
+        }
+
+        boxesStatus.textContent = `Updated box: ${data.id || id}`;
+        boxesStatus.className = "mb-3 text-sm text-success";
+        loadBoxes();
+        return;
+      }
+
+      const deleteBtn = target.closest(".delete-box-btn");
+      if (deleteBtn instanceof HTMLElement) {
+        const id = deleteBtn.dataset.id;
+        if (!id) return;
+
+        if (!confirm("Delete this box?")) return;
+
+        boxesStatus.textContent = "Deleting box...";
+        boxesStatus.className = "mb-3 text-sm text-slate-500";
+
+        const response = await requestWithAdminKey(`/admin/boxes/${id}`, {
+          method: "DELETE",
+        });
+        if (!response) return;
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          boxesStatus.textContent = data.error || "Failed to delete box.";
+          boxesStatus.className = "mb-3 text-sm text-error";
+          return;
+        }
+
+        boxesStatus.textContent = "Box deleted.";
+        boxesStatus.className = "mb-3 text-sm text-success";
+        loadBoxes();
+      }
+    });
+
+    loadBoxes();
+  </script>
+</MainLayout>
