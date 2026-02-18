@@ -28,7 +28,7 @@ import MainLayout from "../../layouts/MainLayout.astro";
   </main>
 
   <script>
-    const API_URL = "http://localhost:8081/api/v1";
+    const API_URL = (import.meta.env.PUBLIC_API_URL || "http://localhost:8081/api/v1").replace(/\/$/, "");
     const ADMIN_KEY_STORAGE = "bgs_admin_api_key";
 
     const form = document.getElementById("admin-login-form");

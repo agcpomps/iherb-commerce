@@ -23,7 +23,7 @@ const maxImageSize = 5 * 1024 * 1024
 func (h *ProductsHandler) ListProducts(c *echo.Context) error {
 	ctx := c.Request().Context()
 
-	items, err := h.ProductRepo.List(ctx)
+	items, err := h.ProductRepo.ListAll(ctx)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "failed to list products",

@@ -1,7 +1,6 @@
 package products
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -35,7 +34,6 @@ func (h *Handler) Create(c *echo.Context) error {
 
 func (h *Handler) List(c *echo.Context) error {
 	products, err := h.Repo.List(c.Request().Context())
-	fmt.Printf("the products: %v", products)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}

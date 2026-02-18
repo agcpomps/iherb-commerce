@@ -17,5 +17,7 @@ func RegisterRoutes(e *echo.Group, h *OrdersHandler, p *ProductsHandler, b *Boxe
 	admin.POST("/batches", bh.CreateBatch)
 
 	admin.GET("/orders", h.ListOrders)
+	admin.GET("/orders/:id", h.GetOrder)
 	admin.POST("/orders/:id/confirm-payment", h.ConfirmPayment)
+	admin.POST("/orders/:id/cancel", h.CancelOrder)
 }

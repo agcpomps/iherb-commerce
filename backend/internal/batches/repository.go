@@ -2,6 +2,7 @@ package batches
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -77,14 +78,21 @@ func (r *Repository) DecreaseStock(
 	batchID uuid.UUID,
 	quantity int,
 ) error {
-	_, err := tx.Exec(ctx, `
+	cmd, err := tx.Exec(ctx, `
 		UPDATE batches
 		SET quantity_available = quantity_available - $1
 		WHERE id = $2
 		  AND quantity_available >= $1
 	`, quantity, batchID)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if cmd.RowsAffected() == 0 {
+		return errors.New("insufficient stock")
+	}
+
+	return nil
 }
 
 func (r *Repository) ExpireOldBatches(

@@ -43,17 +43,39 @@ import MainLayout from "../../layouts/MainLayout.astro";
           <tbody id="orders-table-body"></tbody>
         </table>
       </div>
+
+      <section id="order-detail" class="mt-4 hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h3 class="text-base font-semibold text-slate-900">Order Detail</h3>
+        <p id="order-detail-meta" class="mt-1 text-sm text-slate-600"></p>
+        <div class="mt-3 overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Batch</th>
+                <th>Qty</th>
+                <th>Unit (AOA)</th>
+                <th>Total (AOA)</th>
+              </tr>
+            </thead>
+            <tbody id="order-detail-items"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
   </main>
 
   <script>
-    const API_URL = "http://localhost:8081/api/v1";
+    const API_URL = (import.meta.env.PUBLIC_API_URL || "http://localhost:8081/api/v1").replace(/\/$/, "");
     const ADMIN_KEY_STORAGE = "bgs_admin_api_key";
     const logoutBtn = document.getElementById("logout-btn");
     const refreshBtn = document.getElementById("refresh-orders-btn");
     const statusFilter = document.getElementById("status-filter");
     const ordersStatus = document.getElementById("orders-status");
     const ordersTableBody = document.getElementById("orders-table-body");
+    const orderDetail = document.getElementById("order-detail");
+    const orderDetailMeta = document.getElementById("order-detail-meta");
+    const orderDetailItems = document.getElementById("order-detail-items");
 
     const apiKey = sessionStorage.getItem(ADMIN_KEY_STORAGE);
     if (!apiKey) {
@@ -111,8 +133,12 @@ import MainLayout from "../../layouts/MainLayout.astro";
               <td>
                 ${
                   isPending
-                    ? `<button class="btn btn-xs btn-success mark-paid-btn" data-id="${item.id}">Mark as paid</button>`
-                    : '<span class="text-slate-500">-</span>'
+                    ? `<div class="flex gap-1">
+                        <button class="btn btn-xs btn-outline view-order-btn" data-id="${item.id}">View</button>
+                        <button class="btn btn-xs btn-success mark-paid-btn" data-id="${item.id}">Mark as paid</button>
+                        <button class="btn btn-xs btn-warning cancel-order-btn" data-id="${item.id}">Cancel</button>
+                      </div>`
+                    : `<button class="btn btn-xs btn-outline view-order-btn" data-id="${item.id}">View</button>`
                 }
               </td>
             </tr>
@@ -162,6 +188,63 @@ import MainLayout from "../../layouts/MainLayout.astro";
       loadOrders();
     };
 
+    const cancelOrder = async (orderID) => {
+      ordersStatus.textContent = `Cancelling order ${orderID}...`;
+      ordersStatus.className = "mb-3 text-sm text-slate-600";
+
+      const response = await requestWithAdminKey(`/admin/orders/${orderID}/cancel`, {
+        method: "POST",
+      });
+      if (!response) return;
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        ordersStatus.textContent = data.error || "Failed to cancel order.";
+        ordersStatus.className = "mb-3 text-sm text-error";
+        return;
+      }
+
+      ordersStatus.textContent = `Order ${orderID} cancelled.`;
+      ordersStatus.className = "mb-3 text-sm text-success";
+      loadOrders();
+    };
+
+    const loadOrderDetail = async (orderID) => {
+      const response = await requestWithAdminKey(`/admin/orders/${orderID}`, { method: "GET" });
+      if (!response) return;
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        ordersStatus.textContent = data.error || "Failed to load order detail.";
+        ordersStatus.className = "mb-3 text-sm text-error";
+        return;
+      }
+
+      if (!(orderDetail instanceof HTMLElement) || !(orderDetailMeta instanceof HTMLElement) || !(orderDetailItems instanceof HTMLElement)) return;
+      orderDetail.classList.remove("hidden");
+      orderDetailMeta.textContent = `Order ${data.id || "-"} | Status: ${data.status || "-"} | Total: ${Number(data.total_amount_aoa || 0).toFixed(2)} AOA`;
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (items.length === 0) {
+        orderDetailItems.innerHTML = '<tr><td colspan="5" class="text-slate-500">No items.</td></tr>';
+        return;
+      }
+
+      orderDetailItems.innerHTML = items
+        .map(
+          (item) => `
+            <tr>
+              <td>${item.product_name || ""}</td>
+              <td>${item.batch_id || ""}</td>
+              <td>${item.quantity || 0}</td>
+              <td>${Number(item.unit_price_aoa || 0).toFixed(2)}</td>
+              <td>${Number(item.total_price_aoa || 0).toFixed(2)}</td>
+            </tr>
+          `
+        )
+        .join("");
+    };
+
     refreshBtn?.addEventListener("click", () => {
       loadOrders();
     });
@@ -175,12 +258,29 @@ import MainLayout from "../../layouts/MainLayout.astro";
       if (!(target instanceof HTMLElement)) return;
 
       const actionBtn = target.closest(".mark-paid-btn");
-      if (!(actionBtn instanceof HTMLElement)) return;
+      if (actionBtn instanceof HTMLElement) {
+        const id = actionBtn.dataset.id;
+        if (!id) return;
+        if (!confirm(`Confirm payment for order ${id}?`)) return;
+        confirmPaid(id);
+        return;
+      }
 
-      const id = actionBtn.dataset.id;
-      if (!id) return;
-      if (!confirm(`Confirm payment for order ${id}?`)) return;
-      confirmPaid(id);
+      const cancelBtn = target.closest(".cancel-order-btn");
+      if (cancelBtn instanceof HTMLElement) {
+        const id = cancelBtn.dataset.id;
+        if (!id) return;
+        if (!confirm(`Cancel order ${id}?`)) return;
+        cancelOrder(id);
+        return;
+      }
+
+      const viewBtn = target.closest(".view-order-btn");
+      if (viewBtn instanceof HTMLElement) {
+        const id = viewBtn.dataset.id;
+        if (!id) return;
+        loadOrderDetail(id);
+      }
     });
 
     loadOrders();

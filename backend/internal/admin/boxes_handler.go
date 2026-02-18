@@ -1,11 +1,13 @@
 package admin
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/agcpomps/iherb-commerce/internal/boxes"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v5"
 )
 
@@ -169,6 +171,12 @@ func (h *BoxesHandler) DeleteBox(c *echo.Context) error {
 	}
 
 	if err := h.BoxesRepo.Delete(ctx, boxID); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "cannot delete box with linked batches",
+			})
+		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "failed to delete box",
 		})

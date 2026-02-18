@@ -155,6 +155,27 @@ func (r *Repository) MarkAsPaid(
 	return nil
 }
 
+func (r *Repository) MarkAsCancelled(
+	ctx context.Context,
+	tx pgx.Tx,
+	orderID string,
+) error {
+	cmd, err := tx.Exec(ctx, `
+	UPDATE orders
+	SET status = 'cancelled'
+	WHERE id = $1 AND status = 'pending_payment'
+`, orderID)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return errors.New("order not found or not pending")
+	}
+
+	return nil
+}
+
 func (r *Repository) List(
 	ctx context.Context,
 	db pgx.Tx,
